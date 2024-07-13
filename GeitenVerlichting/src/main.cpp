@@ -58,6 +58,14 @@ void InitWifi()
     m_WifiServer.begin(m_PortNr);
 }
 
+void SendHttpOkResponse(WiFiClient client)
+{
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-type:text/html");
+    client.println("Connection: close");
+    client.println();
+}
+
 void CheckClients()
 {
     // Check for clients
@@ -67,55 +75,23 @@ void CheckClients()
     if (client)
     {
         m_ConnectionTime = millis();
+        Serial.print("Connection time: ");
+        Serial.println(m_ConnectionTime);
 
-        String incomingMsg = "";
-        bool msgValid = false;
-
-        // Read the buffer while there is a connection and in the timeout time
-        while (client.connected && (m_CurrentTime - m_ConnectionTime) <= m_TimeOut)
-        {
-            // Update the time
-            m_CurrentTime = millis();
-
-            // Read a single byte from the buffer
-            char c = client.read();
-
-            // Check the incoming byte
-            switch (c)
-            {
-                // New Line
-                case '\n':
-                    msgValid = true;
-                    break;
-
-                // Carriage return
-                case '\r'
-                    // Do nothing
-                    break;
-
-                default:
-                    // Add to the message
-                    incomingMsg.concat(c);
-                    break;
-            }
-        }
+        // Read the buffer
+        String incomingMsg = client.readString();
+        Serial.print("Incoming msg: ");
+        Serial.println(incomingMsg);
+        bool msgValid = true;
 
         // Print the full message
-        Serial.println(incomingMsg);
+        // Serial.printf("Incoming message: %s\n", incomingMsg);
 
         if (msgValid)
         {
             SendHttpOkResponse(client);
         }
     }
-}
-
-void SendHttpOkResponse(WiFiClient client)
-{
-    client.println("HTTP/1.1 200 OK");
-    client.println("Content-type:text/html");
-    client.println("Connection: close");
-    client.println();
 }
 #pragma endregion
 
@@ -129,8 +105,7 @@ void setup()
 
 void loop()
 {
-    // put your main code here, to run repeatedly:
-    // Serial.println("Looping");
+    CheckClients();
 
     delay(1000);
 }
