@@ -28,13 +28,62 @@ struct ClientMsg
 
 #pragma endregion
 
+#pragma region HTML Page
+const String html_DocType = "<!doctype html>";
+const String html_Html = "<html lang=\"en-US\">";
+const String html_HtmlEnd = "</html>";
+
+const String html_Head = "<head><title>Geitjes</title><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<link rel=\"icon\" href=\"data:,\">";
+const String html_HeadEnd = "</head>";
+
+const String html_Style = "<style>";
+const String html_StyleEnd = "</style>";
+
+const String html_BodyEnd = "</body>";
+
+void CreateHtmlPage(WiFiClient client)
+{
+    bool ledOn = digitalRead(LedPin);
+
+    // Doc Type-------------------------------------------------
+    client.println(html_DocType);
+
+    // Head-----------------------------------------------------
+    // Header
+    client.println(html_Head);
+    client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
+    client.printf(".button { background-color: %s; border: 2px solid black; color: black; padding: 16px 40px;\n", ledOn ? "red" : "green");
+    client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
+    client.println(html_StyleEnd);
+    client.println(html_HeadEnd);
+            
+    // Body-----------------------------------------------------
+    client.printf("<body><h1>%s</h1>\n", ledOn ? "De geitjes zijn je eeuwig dankbaar voor de verlichting" : "Lul! Je hebt de verlichting uit gezet!");
+
+    // Label
+    // client.printf("<p1>LED status: %s</p1>\n", ledOn ? "aan" : "uit");
+
+    // Button
+    // The href property sets the addres
+    client.printf("<p><a href=\"/LED/%s\"><button class=\"button\">Zet %s</button></a></p>\n", ledOn ? "OFF" : "ON", ledOn ? "uit :(" : "aan!");
+    client.println(html_BodyEnd);
+
+    // End Response---------------------------------------------
+    client.println(html_HtmlEnd);
+    client.println();
+}
+#pragma endregion
+
 #pragma region Methods
 void InitSerialMonitor()
 {
     Serial.begin(115200);
 
-    while (!Serial.available())
+    m_ConnectionTime = millis();
+
+    while (!Serial.available() && (m_CurrentTime - m_ConnectionTime) < m_TimeOut)
     {
+        m_CurrentTime = millis();
         delay(10);
     }
 
@@ -90,17 +139,16 @@ void InitWifi()
     m_WifiServer.begin(m_PortNr);
 }
 
-void SendValidResponse(WiFiClient client)
+void SendResponse(WiFiClient client, bool succes)
 {
-    client.println("HTTP/1.1 200 OK");
-    // client.println("Content-type:text/html");
-    client.println("Connection: close");
-    client.println();
-}
-
-void SendInvalidResponse(WiFiClient client)
-{
-    client.println("HTTP/1.1 400 BAD REQUEST");
+    if (succes)
+    {
+        client.println("HTTP/1.1 200 OK");
+    }
+    else
+    {
+        client.println("HTTP/1.1 400 BAD REQUEST");
+    }
     // client.println("Content-type:text/html");
     client.println("Connection: close");
     client.println();
@@ -147,15 +195,31 @@ void loop()
     // Read incoming clients
     ClientMsg clientData = GetMessage();
 
-    if (sizeof(clientData.message) > 0 && ControlOutputs(clientData.message))
+    if (clientData.message.length() > 0)
     {
-        SendValidResponse(clientData.client);
-    }
-    else
-    {
-        SendInvalidResponse(clientData.client);
-    }
+        Serial.print(clientData.client.remoteIP());
+        Serial.println(" connected");
 
-    delay(100);
+        if (ControlOutputs(clientData.message))
+        {
+            SendResponse(clientData.client, true);
+        }
+        else
+        {
+            SendResponse(clientData.client, false);
+        }
+
+        Serial.println("Send html page");
+        CreateHtmlPage(clientData.client);
+
+        // Clear the response message
+        clientData.message = "";
+
+        // Close the Connection
+        clientData.client.stop();
+        Serial.println("Client disconnected");
+    }    
+
+    delay(1000);
 }
 #pragma endregion
