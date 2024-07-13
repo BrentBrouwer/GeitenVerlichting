@@ -1,10 +1,10 @@
 #ifndef _WifiControl_
 #define _WifiControl_
 
-class WifiControl
+class WifiServerControl
 {
     private:
     public:
-        WifiControl();
+        WifiServerControl();
 };
 #endif
