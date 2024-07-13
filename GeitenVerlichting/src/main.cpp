@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "WiFi.h"
+#include "json_parser.h"
 
 #define LedPin 5
 
@@ -14,6 +15,16 @@ const char *m_Password = "1001100111";
 const long m_TimeOut = 2000;
 unsigned long m_CurrentTime = millis();
 unsigned long m_ConnectionTime = 0;
+
+// Messages
+const char * LedOn = "GET /LED/ON";
+const char * LedOff = "GET /LED/OFF";
+
+struct ClientMsg
+{
+    WiFiClient client;
+    String message;
+};
 
 #pragma endregion
 
@@ -30,6 +41,7 @@ void InitSerialMonitor()
     Serial.println("Serial monitor opened");
 }
 
+#pragma region Outputs
 void InitOutputs()
 {
     pinMode(LedPin, OUTPUT);
@@ -38,6 +50,26 @@ void InitOutputs()
     Serial.printf("Output: %i initialized\n", LedPin);
 }
 
+bool ControlOutputs(String msg)
+{
+    if (msg.indexOf(LedOn) >= 0)
+    {
+        digitalWrite(LedPin, HIGH);
+        Serial.println("Led on");
+        return true;
+    }
+    else if (msg.indexOf(LedOff) >= 0)
+    {
+        digitalWrite(LedPin, LOW);
+        Serial.println("Led off");
+        return true;
+    }
+
+    return false;
+}
+#pragma endregion
+
+#pragma region WiFi
 void InitWifi()
 {
     // Connect to the local Network
@@ -58,18 +90,30 @@ void InitWifi()
     m_WifiServer.begin(m_PortNr);
 }
 
-void SendHttpOkResponse(WiFiClient client)
+void SendValidResponse(WiFiClient client)
 {
     client.println("HTTP/1.1 200 OK");
-    client.println("Content-type:text/html");
+    // client.println("Content-type:text/html");
     client.println("Connection: close");
     client.println();
 }
 
-void CheckClients()
+void SendInvalidResponse(WiFiClient client)
 {
+    client.println("HTTP/1.1 400 BAD REQUEST");
+    // client.println("Content-type:text/html");
+    client.println("Connection: close");
+    client.println();
+}
+
+ClientMsg GetMessage()
+{
+    ClientMsg newClient;
+    String incomingMsg = "";
+
     // Check for clients
     WiFiClient client = m_WifiServer.available();
+    newClient.client = client;
 
     // Check for a new client and if it has data available
     if (client)
@@ -79,20 +123,15 @@ void CheckClients()
         Serial.println(m_ConnectionTime);
 
         // Read the buffer
-        String incomingMsg = client.readString();
+        incomingMsg = client.readStringUntil('\n');
         Serial.print("Incoming msg: ");
         Serial.println(incomingMsg);
-        bool msgValid = true;
-
-        // Print the full message
-        // Serial.printf("Incoming message: %s\n", incomingMsg);
-
-        if (msgValid)
-        {
-            SendHttpOkResponse(client);
-        }
     }
+
+    newClient.message = incomingMsg;
+    return newClient;
 }
+#pragma endregion
 #pragma endregion
 
 #pragma region Program
@@ -105,8 +144,18 @@ void setup()
 
 void loop()
 {
-    CheckClients();
+    // Read incoming clients
+    ClientMsg clientData = GetMessage();
 
-    delay(1000);
+    if (sizeof(clientData.message) > 0 && ControlOutputs(clientData.message))
+    {
+        SendValidResponse(clientData.client);
+    }
+    else
+    {
+        SendInvalidResponse(clientData.client);
+    }
+
+    delay(100);
 }
 #pragma endregion
